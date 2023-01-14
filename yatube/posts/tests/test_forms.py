@@ -1,15 +1,21 @@
+import shutil
+import tempfile
 from http import HTTPStatus
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from ..models import Group, Post, Comment, User
 
 User = get_user_model()
 
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostFormTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -33,6 +39,11 @@ class PostFormTests(TestCase):
             content=cls.small_gif,
             content_type='image/gif'
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.post = Post.objects.create(
@@ -103,7 +114,7 @@ class PostFormTests(TestCase):
             follow=True)
         self.assertEqual(response.status_code, HTTPStatus.OK)
 
-    def test_comment_correct_context(self):
+    def test_authorized_client_can_create_comment(self):
         """Авторизованный пользователь может создать комментарий и он появится
            на странице поста."""
         comments_count = Comment.objects.count()
@@ -121,7 +132,7 @@ class PostFormTests(TestCase):
         self.assertTrue(Comment.objects.filter(text=form_data_1['text']).
                         exists())
 
-    def test_comment_correct_context(self):
+    def test_guest_client_can_not_create_comment(self):
         """Неавторизованный пользователь не может создать комментарий."""
         comments_count = Comment.objects.count()
         form_data_2 = {'text': 'Тестовый коммент_2'}

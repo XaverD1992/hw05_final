@@ -5,7 +5,7 @@
   {% include 'posts/includes/switcher.html' %}
   <h1>Последние обновления на сайте</h1>
   {% load cache %}
-  {% cache 20 index_page %}
+  {% cache 20 index_page page_obj.page%}
     {% for post in page_obj %}
       {% include 'posts/includes/post.html' %}
       {% if not forloop.last %}<hr>{% endif %}

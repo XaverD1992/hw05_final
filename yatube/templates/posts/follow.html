@@ -4,9 +4,8 @@
 {% block content %}
   {% include 'posts/includes/switcher.html' %}
   {% load cache %}
-  {% cache 20 index_page %}
-  <div class="container py-5">
-      <h1>Избранные посты</h1>
+  {% cache 20 index_page page_obj.page%}
+    <h1>Избранные посты</h1>
     {% for post in page_obj %}
     {% include 'posts/includes/post_list.html' %}
       {% if post.group %}
@@ -15,7 +14,6 @@
       {% endif %}
       {% if not forloop.last %}<hr>{% endif %}
     {% endfor %}
-    {% include 'includes/paginator.html' %}
-  </div>
   {% endcache %}
+  {% include 'includes/paginator.html' %}
 {% endblock %}

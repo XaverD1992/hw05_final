@@ -30,9 +30,11 @@ def profile(request, username):
     author = get_object_or_404(User, username=username)
     posts_list = author.posts.select_related('group')
     page_obj = my_paginator(posts_list, request)
+    following = author.following.exists()
     context = {
         'page_obj': page_obj,
         'author': author,
+        'following': following,
     }
     return render(request, 'posts/profile.html', context)
 
@@ -41,7 +43,7 @@ def post_detail(request, post_id):
     form = CommentForm()
     post = get_object_or_404(Post.objects.select_related('author', 'group'),
                              pk=post_id)
-    comments = post.comments.all()
+    comments = post.comments.select_related('author')
     context = {
         'post': post,
         'form': form,
@@ -71,8 +73,9 @@ def post_edit(request, post_id):
     if not form.is_valid():
         return render(request,
                       'posts/create_post.html',
-                      context={'post_id': post_id, 'post': post,
-                               'form': form, 'is_edit': True})
+                      context={'post': post,
+                               'form': form,
+                               'is_edit': True})
     form.save()
     return redirect('posts:post_detail', post_id)
 
@@ -91,10 +94,7 @@ def add_comment(request, post_id):
 
 @login_required
 def follow_index(request):
-    follower = Follow.objects.filter(user=request.user).values_list(
-        'author_id', flat=True
-    )
-    posts_list = Post.objects.filter(author_id__in=follower)
+    posts_list = Post.objects.filter(author__following__user=request.user)
     page_obj = my_paginator(posts_list, request)
     context = {
         'page_obj': page_obj

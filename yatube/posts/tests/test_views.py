@@ -1,10 +1,13 @@
+import shutil
+import tempfile
+
 from django import forms
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.paginator import Page
-from django.test import Client, TestCase
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from ..forms import PostForm
@@ -12,7 +15,10 @@ from ..models import Comment, Group, Post, Follow
 
 User = get_user_model()
 
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
+
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class PostPagesTests(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -36,6 +42,11 @@ class PostPagesTests(TestCase):
             content=cls.small_gif,
             content_type='image/gif'
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        super().tearDownClass()
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
         self.post = Post.objects.create(
@@ -196,20 +207,12 @@ class PostPagesTests(TestCase):
     def test_comment_correct_context(self):
         """Авторизованный пользователь может создать комментарий и он появится
            на странице поста."""
-        comments_count = Comment.objects.count()
-        form_data_1 = {'text': 'Тестовый коммент'}
-        response = self.authorized_client.post(
-            reverse('posts:add_comment', kwargs={'post_id': self.post.id}),
-            data=form_data_1,
-            follow=True,
-        )
-        self.assertRedirects(
-            response, reverse('posts:post_detail',
-                              kwargs={'post_id': self.post.id})
-        )
-        self.assertEqual(Comment.objects.count(), comments_count + 1)
-        self.assertTrue(Comment.objects.filter(text=form_data_1['text']).
-                        exists())
+        response = self.guest_client.get(reverse('posts:post_detail',
+                                                 kwargs={'post_id':
+                                                         self.post.id}))
+        first_comment = response.context.get('comments')[0]
+        first_comment_text = first_comment.text
+        self.assertEqual(first_comment_text, self.post.text)
 
     def test_check_cache(self):
         """Проверка кеша."""
@@ -250,6 +253,64 @@ class PostPagesTests(TestCase):
         response_4 = self.authorized_client_2.get(reverse
                                                   ('posts:follow_index'))
         self.assertEqual(len(response_4.context.get('page_obj')), 0)
+
+    def test_follow_create(self):
+        """Подписка создается при запросе соответствующего url"""
+        self.user_2 = User.objects.create(username='Oleg')
+        self.authorized_client_2 = Client()
+        self.authorized_client_2.force_login(self.user_2)
+        response = self.authorized_client_2.get(reverse('posts:follow_index'))
+        self.assertEqual(len(response.context.get("page_obj")), 0)
+        response_2 = self.authorized_client_2.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.post.author}))
+        self.assertEqual(len(response_2.context.get('page_obj')), 1)
+
+    def test_unfollow_delete(self):
+        """Подписка удаляется при запросе соответствующего url"""
+        self.user_2 = User.objects.create(username='Oleg')
+        self.authorized_client_2 = Client()
+        self.authorized_client_2.force_login(self.user_2)
+        response = self.authorized_client_2.get(reverse('posts:follow_index'))
+        self.assertEqual(len(response.context.get("page_obj")), 0)
+        Follow.objects.get_or_create(user=self.user_2,
+                                     author=self.post.author)
+        response_2 = self.authorized_client_2.get(reverse
+                                                  ('posts:follow_index'))
+        self.assertEqual(len(response_2.context.get('page_obj')), 1)
+        Follow.objects.all().delete()
+        response_3 = self.authorized_client_2.get(reverse
+                                                  ('posts:follow_index'))
+        self.assertEqual(len(response_3.context.get('page_obj')), 0)
+
+    def test_post_appears_in_follow_posts_list_of_the_follower(self):
+        """"Пост появляется в списке избранных постов пользователя,
+            если есть подписка"""
+        post = Post.objects.create(text='ааа', author=self.user,
+                                   group=self.group)
+        self.user_2 = User.objects.create(username='Oleg')
+        self.authorized_client_2 = Client()
+        self.authorized_client_2.force_login(self.user_2)
+        Follow.objects.get_or_create(user=self.user_2,
+                                     author=post.author)
+        response = self.authorized_client_2.get(reverse
+                                                ('posts:follow_index'))
+        self.assertIn(self.post, response.context.get('page_obj'))
+
+    def test_post_not_appears_in_follow_posts_list_of_not_follower(self):
+        """"Пост не появляется в списке избранных постов пользователя,
+            если нету подписки"""
+        post = Post.objects.create(text='ddd', author=self.user,
+                                   group=self.group)
+        self.user_2 = User.objects.create(username='Oleg')
+        Follow.objects.get_or_create(user=self.user_2,
+                                     author=post.author)
+        self.user_3 = User.objects.create(username='Ivan')
+        self.authorized_client_2 = Client()
+        self.authorized_client_2.force_login(self.user_3)
+        response = self.authorized_client_3.get(reverse
+                                                ('posts:follow_index'))
+        self.assertNotIn(self.post, response.context.get('page_obj'))
 
 
 class PaginatorViewsTest(TestCase):
