@@ -212,7 +212,7 @@ class PostPagesTests(TestCase):
                                                          self.post.id}))
         first_comment = response.context.get('comments')[0]
         first_comment_text = first_comment.text
-        self.assertEqual(first_comment_text, self.post.text)
+        self.assertEqual(first_comment_text, self.comment.text)
 
     def test_check_cache(self):
         """Проверка кеша."""
@@ -227,44 +227,18 @@ class PostPagesTests(TestCase):
         response_3 = self.guest_client.get(reverse('posts:index'))
         self.assertNotEqual(response.content, response_3.content)
 
-    def test_follow_page(self):
-        """Авторизованный пользователь может подписываться на других
-           пользователей и удалять их из подписок. Новая запись пользователя
-           появляется в ленте тех, кто на него подписан и не появляется в
-           ленте тех, кто не подписан."""
-        self.user_2 = User.objects.create(username='Oleg')
-        self.authorized_client_2 = Client()
-        self.authorized_client_2.force_login(self.user_2)
-        response = self.authorized_client_2.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context.get("page_obj")), 0)
-        Follow.objects.get_or_create(user=self.user_2, author=self.post.author)
-        response_2 = self.authorized_client_2.get(reverse
-                                                  ('posts:follow_index'))
-        self.assertEqual(len(response_2.context.get('page_obj')), 1)
-        self.assertIn(self.post, response_2.context.get('page_obj'))
-
-        self.user_3 = User.objects.create(username='Igor')
-        self.authorized_client_3 = Client()
-        self.authorized_client_3.force_login(self.user_3)
-        response_3 = self.authorized_client.get(reverse('posts:follow_index'))
-        self.assertNotIn(self.post, response_3.context.get('page_obj'))
-
-        Follow.objects.all().delete()
-        response_4 = self.authorized_client_2.get(reverse
-                                                  ('posts:follow_index'))
-        self.assertEqual(len(response_4.context.get('page_obj')), 0)
-
     def test_follow_create(self):
         """Подписка создается при запросе соответствующего url"""
         self.user_2 = User.objects.create(username='Oleg')
         self.authorized_client_2 = Client()
         self.authorized_client_2.force_login(self.user_2)
         response = self.authorized_client_2.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context.get("page_obj")), 0)
-        response_2 = self.authorized_client_2.get(
-            reverse('posts:profile_follow',
-                    kwargs={'username': self.post.author}))
-        self.assertEqual(len(response_2.context.get('page_obj')), 1)
+        self.assertEqual(len(response.context.get('page_obj')), 0)
+        self.authorized_client_2.get(reverse('posts:profile_follow',
+                                     kwargs={'username': self.user.username}))
+        response_3 = self.authorized_client_2.get(reverse
+                                                  ('posts:follow_index'))
+        self.assertEqual(len(response_3.context.get('page_obj')), 1)
 
     def test_unfollow_delete(self):
         """Подписка удаляется при запросе соответствующего url"""
@@ -302,13 +276,13 @@ class PostPagesTests(TestCase):
             если нету подписки"""
         post = Post.objects.create(text='ddd', author=self.user,
                                    group=self.group)
-        self.user_2 = User.objects.create(username='Oleg')
+        self.user_2 = User.objects.create(username='Ken')
         Follow.objects.get_or_create(user=self.user_2,
                                      author=post.author)
-        self.user_3 = User.objects.create(username='Ivan')
+        self.user_3 = User.objects.create(username='Bon')
         self.authorized_client_2 = Client()
         self.authorized_client_2.force_login(self.user_3)
-        response = self.authorized_client_3.get(reverse
+        response = self.authorized_client_2.get(reverse
                                                 ('posts:follow_index'))
         self.assertNotIn(self.post, response.context.get('page_obj'))
 
