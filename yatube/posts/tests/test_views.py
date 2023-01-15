@@ -232,30 +232,22 @@ class PostPagesTests(TestCase):
         self.user_2 = User.objects.create(username='Oleg')
         self.authorized_client_2 = Client()
         self.authorized_client_2.force_login(self.user_2)
-        response = self.authorized_client_2.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context.get('page_obj')), 0)
         self.authorized_client_2.get(reverse('posts:profile_follow',
                                      kwargs={'username': self.user.username}))
-        response_3 = self.authorized_client_2.get(reverse
-                                                  ('posts:follow_index'))
-        self.assertEqual(len(response_3.context.get('page_obj')), 1)
+        self.assertTrue(Follow.objects.filter(user=self.user_2,
+                                              author=self.user).exists())
 
     def test_unfollow_delete(self):
         """Подписка удаляется при запросе соответствующего url"""
         self.user_2 = User.objects.create(username='Oleg')
         self.authorized_client_2 = Client()
         self.authorized_client_2.force_login(self.user_2)
-        response = self.authorized_client_2.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context.get("page_obj")), 0)
         Follow.objects.get_or_create(user=self.user_2,
-                                     author=self.post.author)
-        response_2 = self.authorized_client_2.get(reverse
-                                                  ('posts:follow_index'))
-        self.assertEqual(len(response_2.context.get('page_obj')), 1)
-        Follow.objects.all().delete()
-        response_3 = self.authorized_client_2.get(reverse
-                                                  ('posts:follow_index'))
-        self.assertEqual(len(response_3.context.get('page_obj')), 0)
+                                     author=self.user)
+        self.authorized_client_2.get(reverse('posts:profile_unfollow',
+                                     kwargs={'username': self.user.username}))
+        self.assertFalse(Follow.objects.filter(user=self.user_2,
+                                               author=self.user).exists())
 
     def test_post_appears_in_follow_posts_list_of_the_follower(self):
         """"Пост появляется в списке избранных постов пользователя,
